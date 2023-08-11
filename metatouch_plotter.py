@@ -2,22 +2,64 @@ import sys
 import numpy as np
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import pyqtgraph as pg
+import socket
+from threading import Thread
 from scipy.ndimage import rotate
 
+HOST = "192.168.0.239"
+PORT = 9090
+
 class DataStream():
-    def __init__(self, event, channel):
+    def __init__(self, _host, _port, event):
+        self.host =  _host
+        self.port = _port
         self.signal = event
-        self.channel = channel
-        self.slice = np.zeros((channel, 1000))
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.slice = np.zeros((4, 1000))
 
     def read_channels(self):
-        self.generate_data()
-        for i in range(self.channel):
+        for i in range(self.slice.shape[0]):
             dataframe = self.slice[i]
             self.signal[i].emit(dataframe)
 
-    def generate_data(self):
-        self.slice = np.random().randint(0,100,(self.channel,1000))
+    def thread(self):
+        return Thread(target=self.stream)
+
+    def run_connection(self, conn, index):
+        conn.settimeout(3)
+        while True:
+            try:          
+                signal = np.array([])
+                bytes_received = 0
+                while(bytes_received < 2 * 4008):
+                    message = conn.recv(2 * 4008 - bytes_received)
+                    temp = np.frombuffer(message, dtype=np.uint8)
+                    signal = np.hstack((signal, temp))
+                    bytes_received += temp.shape[0]
+                signal = np.asarray(signal, dtype='<B').view(np.uint16)
+                self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
+                
+            except socket.timeout:
+                self.s.settimeout(10)
+                print("timeout")
+                self.slice = np.zeros((4, 1000))
+                return index
+        
+    def stream(self):
+        self.s.bind((self.host, self.port))
+        self.s.listen(5) 
+        self.s.setblocking(0)
+        self.s.settimeout(20)
+        index = 0
+        while True:
+            try:
+                conn, addr = self.s.accept()
+                print(f"Connected to {addr}")
+                index = self.run_connection(conn, index)
+            except socket.timeout:
+                print("Ended Connection")
+                np.zeros((4, 1000))
+                exit()
 
 class SpectrogramWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
@@ -112,4 +154,4 @@ if __name__ == '__main__':
     th.start()
 
     central_widget.show()
-    sys.exit(app.exec())    
+    sys.exit(app.exec())  
