@@ -16,13 +16,13 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <layout class="QHBoxLayout" name="lineplotHL"/>
+     <layout class="QHBoxLayout" name="LineplotHL"/>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="spectogram"/>
+     <layout class="QHBoxLayout" name="SpectrogramHL"/>
     </item>
     <item>
-     <layout class="QGridLayout" name="consoleGL"/>
+     <layout class="QGridLayout" name="ConsoleGL"/>
     </item>
    </layout>
   </widget>

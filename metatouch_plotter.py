@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # ==============================================================================
 """
-    __  ___     __       ______                 __  
-   /  |/  /__  / /_____ /_  __/___  __  _______/ /_ 
+	__	___		__		 ______					__	
+   /  |/  /__  / /_____ /_	__/___	__	_______/ /_ 
   / /|_/ / _ \/ __/ __ `// / / __ \/ / / / ___/ __ \
  / /  / /  __/ /_/ /_/ // / / /_/ / /_/ / /__/ / / /
-/_/  /_/\___/\__/\__,_//_/  \____/\__,_/\___/_/ /_/  V.0.1
+/_/  /_/\___/\__/\__,_//_/	\____/\__,_/\___/_/ /_/  V.0.1
 
 Author: Abhipol Vibhatasilpin (abhipol@umich.edu)
 Description:
@@ -26,6 +26,10 @@ from scipy.ndimage import rotate
 
 # UI tools 
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
+from PyQt5.QtCore  import *
+from PyQt5.QtGui   import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import QPalette, QColor
 import pyqtgraph as pg
 
 # Custom 
@@ -37,148 +41,236 @@ config.read('config.ini')
 
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
+FRAMELENGTH = int(config['GLOBAL']['FRAMELENGTH'])
+LABELS = config['GLOBAL']['LABELS'][1:-1].split(', ') 
 
 # ==============================================================================
 
+# Global font configuration
+font_family = 'Verdana'
+fontsize_normal = 11
+
 class MetaTouch(QtWidgets.QMainWindow):
-    """ Driver class for the application """
-    def __init__(self):
-        super(MetaTouch, self).__init__()
-        uic.loadUi("mtplot_win_layout.ui, self)
-        self.show()
-        
-        self.setWindowTitles("MetaTouch Plotter V.0.1")
-        self.spectograms = []
-        self.lineplots = []
+	""" Driver class for the application """
+	def __init__(self):
+		super(MetaTouch, self).__init__()
+		uic.loadUi("mtplot_win_layout.ui", self)
+		self.show()
+		
+		self.setWindowTitle("MetaTouch Plotter V.0.1")
+		
+		# Initialize pg object containers
+		self.title_labels = []
+		self.lineplots = []
+		self.spectrograms = []
+		self.update_signals = []
 
-        # Set up the FPS counter
-        self.num_frames = 0
-        self.fps_label = QtWidget.QLabel()
-        self.fps_label.setText("FPS: {}".format(self.num_frames))
+		# Set up the FPS counter
+		self.num_frames = 0
+		self.fps_label = QtWidgets.QLabel()
+		self.fps_label.setText("FPS: {}".format(self.num_frames))
 
-        # Set up the message label at the bottom
-        self.footer = QtWidgets.QLabel("MetaTouch")
-        self.footer.setWordWrap(True)
-        self.footer.setFixedWidth(self.width())
-        self.footer.setAlignment(Qt.AlignHCenter)
+		# Set up the message label at the bottom
+		self.footer = QtWidgets.QLabel("MetaTouch")
+		self.footer.setWordWrap(True)
+		self.footer.setFixedWidth(self.width())
+		self.footer.setAlignment(Qt.AlignHCenter)
 
-        self.build()
+		self.build()
 
-    def build(self):
-        """ Called after class constructor """
-        # Set up the spectograms and line plots
-        for i in range(NUM_CHANNELS):
-            
+	def build(self):
+		""" Called after class constructor """
+		# Set up the spectrograms and line plots
+		for i in range(NUM_CHANNELS):
+			lineplot_container = QtWidgets.QWidget()
+			lineplotVL = QtWidgets.QVBoxLayout()
+			lineplot_container.setLayout(lineplotVL)
+			
+			title = QtWidgets.QLabel(self)
+			title.setContentsMargins(20,0,0,0)
+			title.setFont(QtGui.QFont(font_family, fontsize_normal))
+			title.setText(CHANNELS[i])
+			self.title_labels.append(title)
 
-        w1 = SpectrogramWidget()
-        w1.read_collected.connect(w1.update)
+			lineplot = LineplotWidget()
+			lineplot.setMinimumHeight(0)
+			lineplot.read_collected.connect(lineplot.update)
+			
+			self.update_signals.append(lineplot.read_collected)
+			self.lineplots.append(lineplot)
 
-        w2 = SpectrogramWidget()
-        w2.read_collected.connect(w2.update)
+			lineplotVL.addWidget(title, alignment=Qt.AlignCenter)
+			lineplotVL.addWidget(lineplot)
 
-        w3 = SpectrogramWidget()
-        w3.read_collected.connect(w3.update)
+			self.LineplotHL.addWidget(lineplot_container)
 
-        w4 = SpectrogramWidget()
-        w4.read_collected.connect(w4.update)
+			spectrogram = SpectrogramWidget()
+			spectrogram.read_collected.connect(spectrogram.update)
+			
+			self.update_signals.append(spectrogram.read_collected)
+			self.spectrograms.append(spectrogram)
 
-        w5 = LineplotWidget()
-        w5.setTitle("40KHz Phase")
-        w1.read_collected.connect(w5.update)
+			self.SpectrogramHL.addWidget(spectrogram)
 
-        w6 = LineplotWidget()
-        w6.setTitle("40KHz Mag")
-        w2.read_collected.connect(w6.update)
+		# Set up the bottom console widgets
+		self.ConsoleGL.addWidget(self.footer, 1, 1, 
+								 alignment=Qt.AlignHCenter)
+		self.ConsoleGL.addWidget(self.fps_label, 1, 1, 
+								 alignment=Qt.AlignRight)
+		
+		self.ds = DataSource(self.update_signals, NUM_CHANNELS)
+	
+		# Setup timer(s)
+		self.plot_timer = QtCore.QTimer()
+		self.plot_timer.timeout.connect(self.ds.read_channels)
+		self.plot_timer.start(100)
+		
+		# Apply theme
+		self.set_theme()
 
-        w7 = LineplotWidget()
-        w7.setTitle("200KHz Mag")
-        w3.read_collected.connect(w7.update)
+	def keyPressEvent(self, event):
+		"""Listen and handle keyboard input."""
 
-        w8 = LineplotWidget()
-        w8.setTitle("200KHz Phase")
-        w4.read_collected.connect(w8.update)
+		# SpaceBar
+		if event.key()==Qt.Key_Space:
+			self.footer.setText("Collecting...")
+			# self.on_spacebar()
+			# self.stepsbar.update_label_state(self.labels)
+		# L
+		elif event.key()==Qt.Key_L:
+			self.footer.setText("Loading...")
+			# self.stepsbar.set_state(0, 1)
+			# self.on_load()
+		# S
+		elif event.key()==Qt.Key_S:
+			self.footer.setText("Saving...")
+			# self.stepsbar.set_state(2, 1)
+			# self.on_save()
+		# P
+		elif event.key()==Qt.Key_P:
+			self.footer.setText("Printed to [filename]")
+			# self.stepsbar.set_state(2, 1)
+			# self.on_save()
+		# BackSpace
+		elif event.key()==Qt.Key_Backspace:
+			self.footer.setText("Deleting...")
+			# self.on_delete_frame()
+			# self.stepsbar.update_label_state(self.labels)
+		# Key Up
+		elif event.key()==Qt.Key_Up:
+			self.footer.setText("Up")
+			# self.on_up()
+		# Key Down
+		elif event.key()==Qt.Key_Down:
+			self.footer.setText("Down")
+			# self.on_down()
+		# Key Left
+		elif event.key()==Qt.Key_Left:
+			self.footer.setText("Left")
+			# self.on_up()
+		# Key Right
+		elif event.key()==Qt.Key_Right:
+			self.footer.setText("Right")
+			# self.on_right()
+		else:
+			self.footer.setText("Invalid Keyboard Input.")
 
-        # Set up the bottom console widgets
-        self.consoleGL.addWidget(self.footer, 1, 1, alignment=QtCore.Qt.AlignHCenter)
-        self.consoleGL.addWidget(self.fps_label, 1, 1, alignment=QtCore.QtAlignRight)
+	def set_theme(self):
+		palette = QPalette()
+		palette.setColor(QPalette.Window, QColor(10, 10, 10))
+		palette.setColor(QPalette.WindowText, Qt.white)
+		palette.setColor(QPalette.Base, Qt.black)
+		palette.setColor(QPalette.AlternateBase, Qt.gray)
+		palette.setColor(QPalette.ToolTipBase, Qt.white)
+		palette.setColor(QPalette.ToolTipText, Qt.white)
+		palette.setColor(QPalette.Text, Qt.white)
+		palette.setColor(QPalette.Button, Qt.black)
+		palette.setColor(QPalette.Background, QColor(28, 28, 30))
+		palette.setColor(QPalette.ButtonText, Qt.white)
+		palette.setColor(QPalette.BrightText, Qt.red)
+		palette.setColor(QPalette.Link, QColor(42, 130, 218))
+		palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+		palette.setColor(QPalette.HighlightedText, Qt.black)
+		self.setPalette(palette)
 
-        d = DataStream(event=[w1.read_collected,
-                              w2.read_collected,
-                              w3.read_collected,
-                              w4.read_collected],channel=4)
-    
-        # Setup timer(s)
-        t = QtCore.QTimer()
-        t.timeout.connect(d.read_channels)
-        t.start(1)
+		board_stylesheet = 'background-color: rgb(44, 44, 46); border-radius: 8px'
+		# self.Graphs.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+		# self.Graphs.setStyleSheet(board_stylesheet)
+		# self.FeatGraphs.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+		# self.FeatGraphs.setStyleSheet(board_stylesheet)
 
-    def keyPressEvent(self, event):
-        """Listen to and service keyboard input signal"""
+		for spectrogram in self.spectrograms:
+			spectrogram.setBackground((44, 44, 46))
+		for lineplot in self.lineplots:
+			lineplot.setBackground((44, 44, 46))
+		for i in range(NUM_CHANNELS):
+			self.title_labels[i].setStyleSheet("color: white; font: bold")
 
 class DataSource():
-    def __init__(self, event, channel):
-        self.signal = event
-        self.channel = channel
-        self.slice = np.zeros((channel, 1000))
+	""" Class that handles incoming data """ 
+	def __init__(self, event, channel):
+		self.signal = event
+		self.channel = channel
+		self.slice = np.zeros((channel, 1000))
 
-    def read_channels(self):
-        self.generate_data()
-        for i in range(self.channel):
-            dataframe = self.slice[i]
-            self.signal[i].emit(dataframe)
-
-    def generate_data(self):
-        self.slice = np.random.randint(0,100,(self.channel,1000))
+	def read_channels(self):
+		self.slice = np.random.randint(0,100,(self.channel,1000))
+		for i in range(self.channel):
+			self.signal[2*i].emit(self.slice[i])
+			self.signal[2*i + 1].emit(self.slice[i])
 
 class SpectrogramWidget(pg.PlotWidget):
-    read_collected = QtCore.pyqtSignal(np.ndarray)
+	read_collected = QtCore.pyqtSignal(np.ndarray)
 
-    def __init__(self):
-        super(SpectrogramWidget, self).__init__()
+	def __init__(self):
+		super(SpectrogramWidget, self).__init__()
 
-        self.img = pg.ImageItem()
-        self.addItem(self.img)
+		self.img = pg.ImageItem()
+		self.addItem(self.img)
 
-        self.img_array = np.zeros((100, 1000))
-        cmap = pg.colormap.get('magma')
+		self.img_array = np.zeros((100, 1000))
+		cmap = pg.colormap.get('magma')
 
-        self.img.setColorMap(colorMap=cmap)
+		self.img.setColorMap(colorMap=cmap)
 
-        self.setXRange(0,1000)
-        self.setYRange(0,100)
-        self.setLabel('left', 'Frame')
-        self.setLabel('bottom', 'Index')
-        self.setMouseEnabled(x=False,y=False)
-        self.addColorBar(self.img,colorMap='magma',
-                         interactive=False,
-                         values=(0,2))
-        self.setMenuEnabled(enableMenu=False)
-        self.show()
+		self.setXRange(0,1000)
+		self.setYRange(0,100)
+		self.setLabel('left', 'Frame')
+		self.setLabel('bottom', 'Index')
+		self.setMouseEnabled(x=False,y=False)
+		# self.addColorBar(self.img,colorMap='magma',
+		#				  interactive=False,
+		#				  values=(0,2))
+		self.setMenuEnabled(enableMenu=False)
+		self.show()
 
-    def update(self, layer):
-        self.img_array = np.roll(self.img_array, -1, 0)
-        self.img_array[-1:] = layer
-        rotate(input=self.img_array,angle=90)
-        np.fliplr(self.img_array)
+	def update(self, layer):
+		self.img_array = np.roll(self.img_array, -1, 0)
+		self.img_array[-1:] = layer
+		img_display = np.flip(self.img_array, axis=1)
+		img_display = rotate(img_display,angle=90)
+		self.img.setImage(img_display)
 
 class LineplotWidget(pg.PlotWidget):
-    def __init__(self):
-        super(LineplotWidget, self).__init__()
-        self.line = pg.PlotDataItem(np.zeros(1000))
-        self.addItem(self.line)
-        self.setLabel('left', 'Voltage', units='mV')
-        self.setLabel('bottom', 'Index')
-        self.setMouseEnabled(x=False,y=False)
-        self.setMenuEnabled(enableMenu=False)
-        self.show()
+	read_collected = QtCore.pyqtSignal(np.ndarray)
+	def __init__(self):
+		super(LineplotWidget, self).__init__()
+		self.line = pg.PlotDataItem(np.zeros(1000))
+		self.addItem(self.line)
+		self.setLabel('left', 'Voltage', units='mV')
+		self.setLabel('bottom', 'Index')
+		self.setMouseEnabled(x=False,y=False)
+		self.setMenuEnabled(enableMenu=False)
+		self.show()
 
-    def update(self, layer):
-        self.line.setData(layer)
+	def update(self, layer):
+		self.line.setData(layer)
 
 if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
-    win = MetaTouch()
-
-sys.exit(app.exec())    
+	app = QtWidgets.QApplication(sys.argv)
+	win = MetaTouch()
+	app.setStyle("Fusion")
+	app.setFont(QtGui.QFont(font_family, fontsize_normal))
+	app.exec()	  
 
 
