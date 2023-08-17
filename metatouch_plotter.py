@@ -8,7 +8,8 @@
 /_/  /_/\___/\__/\__,_//_/	\____/\__,_/\___/_/ /_/  V.0.1
 
 Author: Abhipol Vibhatasilpin (abhipol@umich.edu)
-Description:
+Description: Configurable data visualization and collection tool for the 
+			 MetaTouch research project
 
 """
 # ==============================================================================
@@ -42,7 +43,7 @@ config.read('config.ini')
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
 FRAMELENGTH = int(config['GLOBAL']['FRAMELENGTH'])
-LABELS = config['GLOBAL']['LABELS'][1:-1].split(', ') 
+CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
 
 # ==============================================================================
 
@@ -56,7 +57,6 @@ class MetaTouch(QtWidgets.QMainWindow):
 		super(MetaTouch, self).__init__()
 		uic.loadUi("mtplot_win_layout.ui", self)
 		self.show()
-		
 		self.setWindowTitle("MetaTouch Plotter V.0.1")
 		
 		# Initialize pg object containers
@@ -65,6 +65,8 @@ class MetaTouch(QtWidgets.QMainWindow):
 		self.spectrograms = []
 		self.update_signals = []
 
+		self.labels = Labels(LABELS, self)	
+		
 		# Set up the FPS counter
 		self.num_frames = 0
 		self.fps_label = QtWidgets.QLabel()
@@ -82,11 +84,15 @@ class MetaTouch(QtWidgets.QMainWindow):
 		""" Called after class constructor """
 		self.LinePane = QtWidgets.QWidget()
 		self.LinePaneHL = QtWidgets.QHBoxLayout()
+		self.SpecArray = QtWidgets.QWidget()
+		self.SpecArrayHL = QtWidgets.QHBoxLayout()
 		self.SpecPane = QtWidgets.QWidget()
-		self.SpecPaneHL = QtWidgets.QHBoxLayout()
+		self.SpecPaneVL = QtWidgets.QVBoxLayout()
 		self.LinePane.setLayout(self.LinePaneHL)
-		self.SpecPane.setLayout(self.SpecPaneHL)
-		
+		self.SpecArray.setLayout(self.SpecArrayHL)
+		self.SpecPane.setLayout(self.SpecPaneVL)
+
+		pg.setConfigOption('background', (44, 44, 46))
 		# Set up the spectrograms and line plots
 		for i in range(NUM_CHANNELS):
 			lineplot_with_label = QtWidgets.QWidget()
@@ -117,11 +123,25 @@ class MetaTouch(QtWidgets.QMainWindow):
 			self.update_signals.append(spectrogram.read_collected)
 			self.spectrograms.append(spectrogram)
 
-			self.SpecPaneHL.addWidget(spectrogram)
+			self.SpecArrayHL.addWidget(spectrogram)
 		
+		# Create a color bar widget
+		self.SpecBar = pg.GraphicsLayoutWidget()
+		self.Cbar = pg.ColorBarItem(values=(0,2),
+								width=10,
+								colorMap='magma',
+								interactive=False,
+								orientation='horizontal')
+		self.SpecBar.addItem(self.Cbar)
+
+		# Assemble the spectogram pane		
+		self.SpecPaneVL.addWidget(self.SpecArray)
+		self.SpecPaneVL.addWidget(self.SpecBar)
+
 		# Set up the main display
 		self.PlotVL.addWidget(self.LinePane)
 		self.PlotVL.addWidget(self.SpecPane)
+
 		# Set up the bottom console widgets
 		self.FooterGL.addWidget(self.footer, 1, 1, 
 								 alignment=Qt.AlignHCenter)
@@ -140,7 +160,10 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 	def keyPressEvent(self, event):
 		"""Listen and handle keyboard input."""
-
+		self.footer.setText("MetaTouch")
+		# Q
+		if event.key()==Qt.Key_Q:
+			quit()
 		# SpaceBar
 		if event.key()==Qt.Key_Space:
 			self.footer.setText("Collecting...")
@@ -158,6 +181,8 @@ class MetaTouch(QtWidgets.QMainWindow):
 			# self.on_save()
 		# P
 		elif event.key()==Qt.Key_P:
+			specScreen = self.SpecPane.grab(self.SpecPane.rect())
+			specScreen.save("filename.png")
 			self.footer.setText("Printed to [filename]")
 			# self.stepsbar.set_state(2, 1)
 			# self.on_save()
@@ -248,9 +273,6 @@ class SpectrogramWidget(pg.PlotWidget):
 		self.setLabel('left', 'Frame')
 		self.setLabel('bottom', 'Index')
 		self.setMouseEnabled(x=False,y=False)
-		# self.addColorBar(self.img,colorMap='magma',
-		#				  interactive=False,
-		#				  values=(0,2))
 		self.setMenuEnabled(enableMenu=False)
 		self.show()
 
