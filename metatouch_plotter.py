@@ -80,11 +80,18 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 	def build(self):
 		""" Called after class constructor """
+		self.LinePane = QtWidgets.QWidget()
+		self.LinePaneHL = QtWidgets.QHBoxLayout()
+		self.SpecPane = QtWidgets.QWidget()
+		self.SpecPaneHL = QtWidgets.QHBoxLayout()
+		self.LinePane.setLayout(self.LinePaneHL)
+		self.SpecPane.setLayout(self.SpecPaneHL)
+		
 		# Set up the spectrograms and line plots
 		for i in range(NUM_CHANNELS):
-			lineplot_container = QtWidgets.QWidget()
-			lineplotVL = QtWidgets.QVBoxLayout()
-			lineplot_container.setLayout(lineplotVL)
+			lineplot_with_label = QtWidgets.QWidget()
+			lineplot_with_label_VL = QtWidgets.QVBoxLayout()
+			lineplot_with_label.setLayout(lineplot_with_label_VL)
 			
 			title = QtWidgets.QLabel(self)
 			title.setContentsMargins(20,0,0,0)
@@ -99,10 +106,10 @@ class MetaTouch(QtWidgets.QMainWindow):
 			self.update_signals.append(lineplot.read_collected)
 			self.lineplots.append(lineplot)
 
-			lineplotVL.addWidget(title, alignment=Qt.AlignCenter)
-			lineplotVL.addWidget(lineplot)
+			lineplot_with_label_VL.addWidget(title, alignment=Qt.AlignCenter)
+			lineplot_with_label_VL.addWidget(lineplot)
 
-			self.LineplotHL.addWidget(lineplot_container)
+			self.LinePaneHL.addWidget(lineplot_with_label)
 
 			spectrogram = SpectrogramWidget()
 			spectrogram.read_collected.connect(spectrogram.update)
@@ -110,17 +117,20 @@ class MetaTouch(QtWidgets.QMainWindow):
 			self.update_signals.append(spectrogram.read_collected)
 			self.spectrograms.append(spectrogram)
 
-			self.SpectrogramHL.addWidget(spectrogram)
-
+			self.SpecPaneHL.addWidget(spectrogram)
+		
+		# Set up the main display
+		self.PlotVL.addWidget(self.LinePane)
+		self.PlotVL.addWidget(self.SpecPane)
 		# Set up the bottom console widgets
-		self.ConsoleGL.addWidget(self.footer, 1, 1, 
+		self.FooterGL.addWidget(self.footer, 1, 1, 
 								 alignment=Qt.AlignHCenter)
-		self.ConsoleGL.addWidget(self.fps_label, 1, 1, 
+		self.FooterGL.addWidget(self.fps_label, 1, 1, 
 								 alignment=Qt.AlignRight)
 		
 		self.ds = DataSource(self.update_signals, NUM_CHANNELS)
 	
-		# Setup timer(s)
+		# Set up timer(s)
 		self.plot_timer = QtCore.QTimer()
 		self.plot_timer.timeout.connect(self.ds.read_channels)
 		self.plot_timer.start(100)
@@ -194,10 +204,10 @@ class MetaTouch(QtWidgets.QMainWindow):
 		self.setPalette(palette)
 
 		board_stylesheet = 'background-color: rgb(44, 44, 46); border-radius: 8px'
-		# self.Graphs.setAttribute(QtCore.Qt.WA_StyledBackground, True)
-		# self.Graphs.setStyleSheet(board_stylesheet)
-		# self.FeatGraphs.setAttribute(QtCore.Qt.WA_StyledBackground, True)
-		# self.FeatGraphs.setStyleSheet(board_stylesheet)
+		self.LinePane.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+		self.LinePane.setStyleSheet(board_stylesheet)
+		self.SpecPane.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+		self.SpecPane.setStyleSheet(board_stylesheet)
 
 		for spectrogram in self.spectrograms:
 			spectrogram.setBackground((44, 44, 46))
@@ -211,10 +221,10 @@ class DataSource():
 	def __init__(self, event, channel):
 		self.signal = event
 		self.channel = channel
-		self.slice = np.zeros((channel, 1000))
+		gradient_slice = np.linspace(0,2,1000)
+		self.slice = np.tile(gradient_slice, (channel, 1))
 
 	def read_channels(self):
-		self.slice = np.random.randint(0,100,(self.channel,1000))
 		for i in range(self.channel):
 			self.signal[2*i].emit(self.slice[i])
 			self.signal[2*i + 1].emit(self.slice[i])

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
+    <width>948</width>
     <height>650</height>
    </rect>
   </property>
@@ -16,17 +16,19 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <layout class="QHBoxLayout" name="LineplotHL"/>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="SpectrogramHL"/>
-    </item>
-    <item>
      <layout class="QGridLayout" name="ConsoleGL"/>
+    </item>
+    <item>
+     <layout class="QVBoxLayout" name="PlotVL"/>
+    </item>
+    <item>
+     <layout class="QGridLayout" name="PlotGL"/>
+    </item>
+    <item>
+     <layout class="QGridLayout" name="FooterGL"/>
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <resources/>
  <connections/>
