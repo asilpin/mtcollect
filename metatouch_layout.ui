@@ -16,13 +16,13 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
+     <layout class="QGridLayout" name="HeaderGL"/>
+    </item>
+    <item>
      <layout class="QGridLayout" name="ConsoleGL"/>
     </item>
     <item>
      <layout class="QVBoxLayout" name="PlotVL"/>
-    </item>
-    <item>
-     <layout class="QGridLayout" name="PlotGL"/>
     </item>
     <item>
      <layout class="QGridLayout" name="FooterGL"/>

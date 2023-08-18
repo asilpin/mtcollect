@@ -33,7 +33,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QPalette, QColor
 import pyqtgraph as pg
 
-# Custom 
+# Custom
+from metatouch_label import Labels
 
 # ==============================================================================
 # Read in configuration
@@ -42,7 +43,7 @@ config.read('config.ini')
 
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
-FRAMELENGTH = int(config['GLOBAL']['FRAMELENGTH'])
+FRAME_LENGTH = int(config['GLOBAL']['FRAME_LENGTH'])
 CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
 
 # ==============================================================================
@@ -50,22 +51,25 @@ CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ')
 # Global font configuration
 font_family = 'Verdana'
 fontsize_normal = 11
+fontsize_maximized = 14
+fontsize_labels = fontsize_normal
+fontsize_footer = fontsize_normal + 8
 
 class MetaTouch(QtWidgets.QMainWindow):
 	""" Driver class for the application """
 	def __init__(self):
 		super(MetaTouch, self).__init__()
-		uic.loadUi("mtplot_win_layout.ui", self)
+		uic.loadUi("metatouch_layout.ui", self)
 		self.show()
 		self.setWindowTitle("MetaTouch Plotter V.0.1")
 		
-		# Initialize pg object containers
+		# Keep track of plot elemenets
 		self.title_labels = []
 		self.lineplots = []
 		self.spectrograms = []
 		self.update_signals = []
 
-		self.labels = Labels(LABELS, self)	
+		self.labels = Labels(CLASSES, self)	
 		
 		# Set up the FPS counter
 		self.num_frames = 0
@@ -82,6 +86,8 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 	def build(self):
 		""" Called after class constructor """
+
+		# Add encapsulating widgets
 		self.LinePane = QtWidgets.QWidget()
 		self.LinePaneHL = QtWidgets.QHBoxLayout()
 		self.SpecArray = QtWidgets.QWidget()
@@ -92,21 +98,25 @@ class MetaTouch(QtWidgets.QMainWindow):
 		self.SpecArray.setLayout(self.SpecArrayHL)
 		self.SpecPane.setLayout(self.SpecPaneVL)
 
+		# Enforce global pyqtgraph configuration
 		pg.setConfigOption('background', (44, 44, 46))
+		
 		# Set up the spectrograms and line plots
 		for i in range(NUM_CHANNELS):
+			
+			# Create a temp widget that holds lineplot and label
 			lineplot_with_label = QtWidgets.QWidget()
 			lineplot_with_label_VL = QtWidgets.QVBoxLayout()
 			lineplot_with_label.setLayout(lineplot_with_label_VL)
-			
+		
+			# Generate a label for the plot title	
 			title = QtWidgets.QLabel(self)
-			title.setContentsMargins(20,0,0,0)
-			title.setFont(QtGui.QFont(font_family, fontsize_normal))
 			title.setText(CHANNELS[i])
+
 			self.title_labels.append(title)
 
+			# Instantiate a line plot widget and route the signal
 			lineplot = LineplotWidget()
-			lineplot.setMinimumHeight(0)
 			lineplot.read_collected.connect(lineplot.update)
 			
 			self.update_signals.append(lineplot.read_collected)
@@ -125,10 +135,10 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 			self.SpecArrayHL.addWidget(spectrogram)
 		
-		# Create a color bar widget
+		# Create a colorbar widget
 		self.SpecBar = pg.GraphicsLayoutWidget()
 		self.Cbar = pg.ColorBarItem(values=(0,2),
-								width=10,
+								width=6,
 								colorMap='magma',
 								interactive=False,
 								orientation='horizontal')
@@ -141,8 +151,11 @@ class MetaTouch(QtWidgets.QMainWindow):
 		# Set up the main display
 		self.PlotVL.addWidget(self.LinePane)
 		self.PlotVL.addWidget(self.SpecPane)
+		
+		# Set up the console widgets
+		self.ConsoleGL.addWidget(self.labels, 1, 1,alignment = Qt.AlignLeft)
 
-		# Set up the bottom console widgets
+		# Set up the footer widgets
 		self.FooterGL.addWidget(self.footer, 1, 1, 
 								 alignment=Qt.AlignHCenter)
 		self.FooterGL.addWidget(self.fps_label, 1, 1, 
@@ -167,50 +180,54 @@ class MetaTouch(QtWidgets.QMainWindow):
 		# SpaceBar
 		if event.key()==Qt.Key_Space:
 			self.footer.setText("Collecting...")
-			# self.on_spacebar()
-			# self.stepsbar.update_label_state(self.labels)
+			self.on_spacebar()
 		# L
 		elif event.key()==Qt.Key_L:
 			self.footer.setText("Loading...")
-			# self.stepsbar.set_state(0, 1)
-			# self.on_load()
+			self.on_load()
 		# S
 		elif event.key()==Qt.Key_S:
 			self.footer.setText("Saving...")
-			# self.stepsbar.set_state(2, 1)
-			# self.on_save()
+			self.on_save()
 		# P
 		elif event.key()==Qt.Key_P:
 			specScreen = self.SpecPane.grab(self.SpecPane.rect())
 			specScreen.save("filename.png")
 			self.footer.setText("Printed to [filename]")
-			# self.stepsbar.set_state(2, 1)
-			# self.on_save()
 		# BackSpace
 		elif event.key()==Qt.Key_Backspace:
 			self.footer.setText("Deleting...")
-			# self.on_delete_frame()
-			# self.stepsbar.update_label_state(self.labels)
+			self.on_delete_frame()
 		# Key Up
 		elif event.key()==Qt.Key_Up:
 			self.footer.setText("Up")
-			# self.on_up()
+			self.on_up()
 		# Key Down
 		elif event.key()==Qt.Key_Down:
 			self.footer.setText("Down")
-			# self.on_down()
+			self.on_down()
 		# Key Left
 		elif event.key()==Qt.Key_Left:
 			self.footer.setText("Left")
-			# self.on_up()
+			self.on_up()
 		# Key Right
 		elif event.key()==Qt.Key_Right:
 			self.footer.setText("Right")
-			# self.on_right()
+			self.on_right()
 		else:
 			self.footer.setText("Invalid Keyboard Input.")
 
 	def set_theme(self):
+		
+		self.centralwidget.setContentsMargins(20, 10, 20, 10)
+		self.footer.setContentsMargins(0,10,0,0)		
+		self.LinePane.setContentsMargins(0,0,0,0)
+		self.SpecBar.setMaximumHeight(50)
+		self.SpecPaneVL.setSpacing(0)
+		self.SpecArray.setMinimumHeight(500)
+		self.SpecArray.setContentsMargins(0,0,0,0)
+		self.labels.setMaximumHeight(100)
+
 		palette = QPalette()
 		palette.setColor(QPalette.Window, QColor(10, 10, 10))
 		palette.setColor(QPalette.WindowText, Qt.white)
@@ -233,13 +250,16 @@ class MetaTouch(QtWidgets.QMainWindow):
 		self.LinePane.setStyleSheet(board_stylesheet)
 		self.SpecPane.setAttribute(QtCore.Qt.WA_StyledBackground, True)
 		self.SpecPane.setStyleSheet(board_stylesheet)
-
+		
+		for title in self.title_labels:
+			title.setContentsMargins(20,0,0,0)
+			title.setFont(QtGui.QFont(font_family, fontsize_normal))
+			title.setStyleSheet("color: white; font: bold")
 		for spectrogram in self.spectrograms:
 			spectrogram.setBackground((44, 44, 46))
+			spectrogram.setContentsMargins(0,0,0,0)		
 		for lineplot in self.lineplots:
 			lineplot.setBackground((44, 44, 46))
-		for i in range(NUM_CHANNELS):
-			self.title_labels[i].setStyleSheet("color: white; font: bold")
 
 class DataSource():
 	""" Class that handles incoming data """ 
@@ -285,6 +305,7 @@ class SpectrogramWidget(pg.PlotWidget):
 
 class LineplotWidget(pg.PlotWidget):
 	read_collected = QtCore.pyqtSignal(np.ndarray)
+
 	def __init__(self):
 		super(LineplotWidget, self).__init__()
 		self.line = pg.PlotDataItem(np.zeros(1000))
