@@ -42,6 +42,8 @@ from metatouch_label import ClassLabelWidget
 config = configparser.ConfigParser()
 config.read('config.ini')
 
+HOST = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
+PORT =  config['GLOBAL']['CHANNELS'][1:-1].split(', ')
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
 CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
@@ -223,7 +225,7 @@ class MetaTouch(QtWidgets.QMainWindow):
 	
 	def on_print(self):
 		screenshot = self.PlotPane.grab(self.PlotPane.rect())
-		filename = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S") 
+		filename = datetime.now().strftime("%Y_%m_%d-%I_%M_%S") 
 		screenshot.save(filename + ".png")
 		self.footer.setText("Printed to " + filename)
 	
