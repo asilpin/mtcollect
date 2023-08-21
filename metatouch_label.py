@@ -2,11 +2,10 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QCursor, QPalette, QFont
-from functools import partial
 
-class Labels(QtWidgets.QWidget):
+class ClassLabelWidget(QtWidgets.QWidget):
 
-    def __init__(self, LABELS, ui):
+    def __init__(self, LABELS):
         QtWidgets.QWidget.__init__(self)
 
         self.LabelVL = QtWidgets.QVBoxLayout()
