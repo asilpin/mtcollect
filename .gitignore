@@ -1,1 +1,3 @@
-mtplot-env/
+__pycache__/
+metatouch_env/
+test_*
