@@ -50,6 +50,7 @@ PORT =  int(config['GLOBAL']['PORT'])
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
 CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
+FPS_TICK_RATE = int(config['GLOBAL']['FPS_TICK_RATE'])
 CAPTURE_SIZE = int(config['GLOBAL']['CAPTURE_SIZE'])
 FRAME_LENGTH = int(config['GLOBAL']['FRAME_LENGTH'])
 INDEX_WIDTH = int(config['GLOBAL']['INDEX_WIDTH'])
@@ -183,15 +184,20 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.FooterGL.addWidget(self.conn_stat, 1, 1,
                                 alignment=Qt.AlignLeft)
        
-        self.ds = DataSource(self.update_signals, self.conn_stat)
+        self.ds = DataSource(self.update_signals, self.conn_stat, self.num_frames)
         
         self.socket_thread = self.ds.thread()
         self.socket_thread.start()
 
-        # Set up timer(s)
+        # Set up timers
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.ds.read_channels)
         self.plot_timer.start(100)
+
+        self.num_frames = 0
+        self.fps_timer = QtCore.QTimer()
+        self.fps_timer.timeout.connect(self.update_fps)
+        self.fps_timer.start(FPS_TICK_RATE * 1000)
         
         # Apply theme
         self.set_appearance()
@@ -274,6 +280,12 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.labels.add_frames_current_label(-CAPTURE_SIZE)
         self.footer.setText(f"Deleted {CAPTURE_SIZE} frames.")
 
+    def update_fps(self, *args):
+        """Update FPS label."""
+        fps = int(self.num_frames/FPS_TICK_RATE)
+        self.fps_label.setText("FPS: {}".format(fps))
+        self.num_frames = 0
+
     def set_appearance(self):
         self.centralwidget.setContentsMargins(20, 10, 20, 10)
         self.SpecBar.setMaximumHeight(50)
@@ -314,9 +326,10 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 class DataSource():
     """ Class that handles incoming data """ 
-    def __init__(self,signal,message):
+    def __init__(self,signal,message,framecount):
         self.signal = signal
         self.message = message
+        self.framecount = framecount
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.slice = np.zeros((NUM_CHANNELS, INDEX_WIDTH))
         self.queue = deque()
@@ -346,6 +359,7 @@ class DataSource():
                 signal = np.asarray(signal, dtype='<B').view(np.uint16)
                 self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
                 self.queue.append(self.slice)
+                self.framecount += 1
                 
             except socket.timeout:
                 self.socket.settimeout(10)
@@ -388,6 +402,7 @@ class SpectrogramWidget(pg.PlotWidget):
         self.setLabel('bottom', 'Index')
         self.setMouseEnabled(x=False,y=False)
         self.setMenuEnabled(enableMenu=False)
+        self.getPlotItem().hideButtons()
         self.show()
 
     def update(self, layer):

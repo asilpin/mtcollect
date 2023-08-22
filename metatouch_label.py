@@ -12,10 +12,6 @@ class ClassLabelWidget(QtWidgets.QWidget):
         self.setLayout(self.LabelVL)
         self.setFixedHeight(175)
         
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Minimum,
-            QtWidgets.QSizePolicy.Minimum
-        )
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet('background-color: rgb(44, 44, 46); border-radius: 8px;')
 
@@ -42,11 +38,14 @@ class ClassLabelWidget(QtWidgets.QWidget):
         self.palette = QPalette()
         self.font = QFont()
 
+        self.maxWidth = 0
         for i in range(0, len(self.label_raw_text)):
 
             # initialize each label
             curr_label = QtWidgets.QLabel()
             curr_label.setText(str(i))
+            if curr_label.width() > self.maxWidth:
+                self.maxWidth = curr_label.width()
 
             # set first label to selected
             if i == 0:
@@ -59,9 +58,9 @@ class ClassLabelWidget(QtWidgets.QWidget):
 
             self.labels.append(curr_label)
             self.frames_collected.append(0)
-            self.resize(curr_label.sizeHint())
 
         self.scroll.setWidget(self.scrollContent)
+        self.setMinimumWidth(self.maxWidth)
         self.set_label_text()
 
     def get_current_label_raw_text(self):
