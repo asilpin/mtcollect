@@ -10,13 +10,29 @@ class ClassLabelWidget(QtWidgets.QWidget):
 
         self.LabelVL = QtWidgets.QVBoxLayout()
         self.setLayout(self.LabelVL)
-
+        self.setFixedHeight(175)
+        
         self.setSizePolicy(
             QtWidgets.QSizePolicy.Minimum,
             QtWidgets.QSizePolicy.Minimum
         )
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet('background-color: rgb(44, 44, 46); border-radius: 8px;')
+
+        self.title = QtWidgets.QLabel('Class Labels')
+        self.title.setStyleSheet("color: white; font: bold")
+        self.LabelVL.addWidget(self.title)
+
+        self.scroll = QScrollArea(self)
+        self.LabelVL.addWidget(self.scroll)
+        self.scroll.setWidgetResizable(True)
+        self.scrollContent = QWidget(self.scroll)
+        self.scrollVL = QtWidgets.QVBoxLayout(self.scrollContent)
+        self.scrollContent.setLayout(self.scrollVL)
+        self.scroll.ensureWidgetVisible(self.scrollContent)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scroll.horizontalScrollBar().setEnabled(False)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.labels = []
         self.frames_collected = []
@@ -25,10 +41,6 @@ class ClassLabelWidget(QtWidgets.QWidget):
         self.default_color = "color: white"
         self.palette = QPalette()
         self.font = QFont()
-
-        self.title = QtWidgets.QLabel('Class Labels')
-        self.title.setStyleSheet("color: white; font: bold")
-        self.LabelVL.addWidget(self.title)
 
         for i in range(0, len(self.label_raw_text)):
 
@@ -42,16 +54,14 @@ class ClassLabelWidget(QtWidgets.QWidget):
             else:
                 curr_label.setStyleSheet(self.default_color)
 
-            # contextmenu
-            # curr_label.setContextMenuPolicy(Qt.CustomContextMenu)
-            # curr_label.customContextMenuRequested.connect(partial(self.rightMenuShow, curr_label))
-
             # add label to layout
-            self.LabelVL.addWidget(curr_label)
+            self.scrollVL.addWidget(curr_label)
 
             self.labels.append(curr_label)
             self.frames_collected.append(0)
+            self.resize(curr_label.sizeHint())
 
+        self.scroll.setWidget(self.scrollContent)
         self.set_label_text()
 
     def get_current_label_raw_text(self):
@@ -110,63 +120,6 @@ class ClassLabelWidget(QtWidgets.QWidget):
             self.labels[curr_ind].setStyleSheet(self.default_color)
             self.labels[curr_ind-1].setStyleSheet(self.selected_color)
 
- #   def rightMenuShow(self, thislabel): 
- #       menu = QtWidgets.QMenu()
- #       act_sel = menu.addAction('Select Label')
- #       act_edit = menu.addAction('Edit Label')
- #       act_add = menu.addAction('Add Label')
- #       act_del = menu.addAction('Delete Label')
- #       index = -1
- #       action = menu.exec_(QCursor.pos())
- #       for i in range(len(self.labels)):
- #           if self.labels[i] == thislabel:
- #               index = i
- #               break
-
- #       if action == act_sel:
- #           curr_ind = self.get_current_label_index()
- #           if curr_ind != index and index >= 0 and index < len(self.labels):
- #               self.labels[curr_ind].setStyleSheet(self.default_color)
- #               self.labels[index].setStyleSheet(self.selected_color)
- #       elif action == act_edit:
- #           inputDialog = QInputDialog(None)
- #           inputDialog.setInputMode(QInputDialog.TextInput)
- #           inputDialog.setWindowTitle('Edit')
- #           inputDialog.setLabelText('New label name:')
- #           inputDialog.setPalette(self.palette)
- #           inputDialog.setFont(self.font)
- #           okPressed = inputDialog.exec_()
- #           text = inputDialog.textValue()
- #           if okPressed and text != '':
- #               self.label_raw_text[index] = text
- #               self.set_label_text()
- #       elif action == act_add:
- #           curr_label = QtWidgets.QLabel()
- #           curr_label.setStyleSheet(self.default_color)
- #           curr_label.setFont(self.font)
- #           curr_label.setContextMenuPolicy(Qt.CustomContextMenu)
- #           curr_label.customContextMenuRequested.connect(partial(self.rightMenuShow, curr_label))
- #           self.LabelVL.addWidget(curr_label)
- #           self.labels.append(curr_label)
- #           self.frames_collected.append(0)
- #           self.label_raw_text.append('default')
- #           self.set_label_text()
- #           self.ui.stepsbar.update_label_num(len(self.labels))
- #           self.ui.stepsbar.update_label_state(self)
- #       elif action == act_del:
- #           curr_ind = self.get_current_label_index()
- #           if curr_ind == index:
- #               self.ui.footer.setText("Cannot delete selected label!")
- #           else:
- #               label_del = self.labels.pop(index)
- #               self.LabelVL.removeWidget(label_del)
- #               label_del.setParent(None)
- #               self.frames_collected.pop(index)
- #               self.label_raw_text.pop(index)
- #               self.set_label_text()
- #               self.ui.stepsbar.update_label_num(len(self.labels))
- #               self.ui.stepsbar.update_label_state(self)
-
     def switch_theme(self, palette):
         self.palette = palette
         curr_index = self.get_current_label_index()
@@ -184,6 +137,3 @@ class ClassLabelWidget(QtWidgets.QWidget):
         font_bold = QFont(font)
         font_bold.setWeight(99)
         self.title.setFont(font_bold)
-
- #   def resizeEvent(self, event):
- #       self.ui.stepsbar.setFixedWidth(self.ui.width() - 55 - event.size().width())

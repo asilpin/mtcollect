@@ -9,7 +9,7 @@
 
 Author: Abhipol Vibhatasilpin (abhipol@umich.edu)
 Description: Configurable data visualization and collection tool for the 
-                         MetaTouch research project
+             MetaTouch research project
 
 """
 # ==============================================================================
@@ -27,6 +27,7 @@ from datetime import datetime
 # Data processing
 import numpy as np
 from scipy.ndimage import rotate
+from collections import deque
 
 # UI tools 
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
@@ -44,8 +45,8 @@ from metatouch_label import ClassLabelWidget
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-HOST = "192.168.1.10"
-PORT =  9090
+HOST = config['GLOBAL']['HOST'] 
+PORT =  int(config['GLOBAL']['PORT'])
 CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
 CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
@@ -78,20 +79,24 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.update_signals = []
 
         self.labels = ClassLabelWidget(CLASSES) 
-        
+
         # Set up the FPS counter
         self.num_frames = 0
         self.fps_label = QtWidgets.QLabel()
-        self.fps_label.setText("FPS: {}".format(self.num_frames))
+        self.fps_label.setText(f"FPS: {self.num_frames}")
+        self.fps_label.setAlignment(Qt.AlignRight)
 
-        # Set up the message label at the bottom
+        # Set up the status message at the bottom
         self.footer = QtWidgets.QLabel("MetaTouch")
         self.footer.setWordWrap(True)
         self.footer.setFixedWidth(self.width())
         self.footer.setAlignment(Qt.AlignHCenter)
 
-        # Set up connection status disaply
-        self.connection = QtWidgets.QLabel()
+        # Set up conn_stat status disaply
+        self.conn_stat = QtWidgets.QLabel("Not Connected")
+        self.conn_stat.setWordWrap(True)
+        self.conn_stat.setFixedWidth(self.width())
+        self.conn_stat.setAlignment(Qt.AlignLeft)
 
         self.build()
 
@@ -172,11 +177,13 @@ class MetaTouch(QtWidgets.QMainWindow):
 
         # Set up the footer widgets
         self.FooterGL.addWidget(self.footer, 1, 1, 
-                                                         alignment=Qt.AlignHCenter)
+                                alignment=Qt.AlignHCenter)
         self.FooterGL.addWidget(self.fps_label, 1, 1, 
-                                                         alignment=Qt.AlignRight)
-        
-        self.ds = DataSource(self.update_signals)
+                                alignment=Qt.AlignRight)
+        self.FooterGL.addWidget(self.conn_stat, 1, 1,
+                                alignment=Qt.AlignLeft)
+       
+        self.ds = DataSource(self.update_signals, self.conn_stat)
         
         self.socket_thread = self.ds.thread()
         self.socket_thread.start()
@@ -194,67 +201,78 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.footer.setText("MetaTouch")
         # Q
         if event.key()==Qt.Key_Q:
-                quit()
+            quit()
         # SpaceBar
         if event.key()==Qt.Key_Space:
-                self.footer.setText("Collecting...")
-                self.on_spacebar()
-        # L
-        elif event.key()==Qt.Key_L:
-                self.footer.setText("Loading...")
-                self.on_load()
-        # S
-        elif event.key()==Qt.Key_S:
-                self.footer.setText("Saving...")
-                self.on_save()
-        # BackSpace
-        elif event.key()==Qt.Key_Backspace:
-                self.footer.setText("Deleting...")
-                self.on_delete_frame()
+            self.footer.setText("Collecting...")
+            self.on_spacebar()
         # P
         elif event.key()==Qt.Key_P:
-                self.on_print()
+            self.on_p()
+        # C 
+        elif event.key()==Qt.Key_C:
+            self.on_c()
+        # Backspace 
+        elif event.key()==Qt.Key_Backspace:
+            self.on_backspace()
         # Key Up
         elif event.key()==Qt.Key_Up:
-                self.on_up()
+            self.on_up()
         # Key Down
         elif event.key()==Qt.Key_Down:
-                self.on_down()
+            self.on_down()
         # Key Left
         elif event.key()==Qt.Key_Left:
-                self.on_up()
+            self.on_up()
         # Key Right
         elif event.key()==Qt.Key_Right:
-                self.on_right()
+            self.on_down()
         else:
-                self.footer.setText("Invalid Keyboard Input.")
+            self.footer.setText("Invalid Keyboard Input.")
     
-    def on_print(self):
+    def on_p(self):
+        """ P for print screen """
         screenshot = self.PlotPane.grab(self.PlotPane.rect())
         filename = datetime.now().strftime("%Y_%m_%d-%I_%M_%S") 
         screenshot.save(filename + ".png")
         self.footer.setText("Printed to " + filename)
     
+    def on_c(self):
+        """ C for clear """
+        for i in range(NUM_CHANNELS):
+            self.spectrograms[i].clear()
+
     def on_up(self):
+        """ Up or Left Arrow to move label up """
         self.labels.move_up()
     
     def on_down(self):
+        """ Down or Right Arrow to move label down """
         self.labels.move_down()
 
     def on_spacebar(self):
-        """Collect frames."""
-        self.footer.setText("Collecting "+str(CAPTURE_SIZE)+" frames.")
+        """ Spacebar to collect data """
         current_label = self.labels.get_current_label_raw_text()
         current_label = current_label.lower().strip().replace(" ", "_")
         num_frame = self.labels.get_current_frames()
-        filename = 'training_data_{}_{}.npy'.format(current_label,num_frame)
+        filename = f"training_data_{current_label}_{num_frame}.npy"
         collected_data = np.empty((NUM_CHANNELS, CAPTURE_SIZE, INDEX_WIDTH)) 
         for i in range(NUM_CHANNELS):
                 collected_data[i] = self.spectrograms[i].img_array[-CAPTURE_SIZE:]
-        print(np.shape(collected_data))
         np.save(filename, collected_data)
         self.labels.add_frames_current_label(CAPTURE_SIZE)
-        self.footer.setText("Done Collecting Frames.")
+        self.footer.setText(f"Collected {CAPTURE_SIZE} frames.")
+    
+    def on_backspace(self):
+        """ Backspace to delete """ 
+        current_label = self.labels.get_current_label_raw_text()
+        current_label = current_label.lower().strip().replace(" ", "_")
+        num_frame = self.labels.get_current_frames() - CAPTURE_SIZE
+        filename = f"training_data_{current_label}_{num_frame}.npy"
+        if os.path.exists(filename):
+            os.remove(filename)
+        self.labels.add_frames_current_label(-CAPTURE_SIZE)
+        self.footer.setText(f"Deleted {CAPTURE_SIZE} frames.")
 
     def set_appearance(self):
         self.centralwidget.setContentsMargins(20, 10, 20, 10)
@@ -296,20 +314,25 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 class DataSource():
     """ Class that handles incoming data """ 
-    def __init__(self,event):
-        self.signal = event
+    def __init__(self,signal,message):
+        self.signal = signal
+        self.message = message
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.slice = np.zeros((NUM_CHANNELS, INDEX_WIDTH))
+        self.queue = deque()
+        self.queue.append(self.slice)
 
     def read_channels(self):
         for i in range(NUM_CHANNELS):
-            self.signal[2*i].emit(self.slice[i])
-            self.signal[2*i + 1].emit(self.slice[i])
+            self.signal[2*i].emit(self.queue[-1][i])
+            self.signal[2*i + 1].emit(self.queue[-1][i])
+        if len(self.queue) > 1:
+            self.queue.popleft()
 
     def thread(self):
         return Thread(target=self.stream)
 
-    def run_connection(self, conn, index):
+    def run_conn_stat(self, conn):
         conn.settimeout(3)
         while True:
             try:          
@@ -322,27 +345,27 @@ class DataSource():
                     bytes_received += temp.shape[0]
                 signal = np.asarray(signal, dtype='<B').view(np.uint16)
                 self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
+                self.queue.append(self.slice)
                 
             except socket.timeout:
                 self.socket.settimeout(10)
-                print("timeout")
-                self.slice = np.zeros((4, 1000))
-                return index
-        
+                self.message.setText("timeout")
+    
     def stream(self):
-        self.socket.bind((HOST, PORT))
-        self.socket.listen(5) 
-        self.socket.setblocking(0)
-        self.socket.settimeout(20)
-        index = 0
+        try:
+            self.socket.bind((HOST, PORT))
+            self.socket.listen(5) 
+            self.socket.setblocking(0)
+            self.socket.settimeout(20)
+        except:
+            self.message.setText("Can not resolve hostname") 
         while True:
             try:
                 conn, addr = self.socket.accept()
-                print(f"Connected to {addr}")
-                index = self.run_connection(conn, index)
+                self.message.setText(f"Connected to {addr}")
+                self.run_conn_stat(conn)
             except socket.timeout:
-                print("Ended Connection")
-                np.zeros((4, 1000))
+                self.message.setText("Ended Connection")
                 exit()
 
 class SpectrogramWidget(pg.PlotWidget):
@@ -373,6 +396,9 @@ class SpectrogramWidget(pg.PlotWidget):
         img_display = np.flip(self.img_array, axis=1)
         img_display = rotate(img_display,angle=90)
         self.img.setImage(img_display)
+
+    def clear(self):
+        self.img_array = np.zeros((FRAME_LENGTH, INDEX_WIDTH))
 
 class LineplotWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
