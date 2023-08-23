@@ -26,6 +26,7 @@ from datetime import datetime
 
 # Data processing
 import numpy as np
+import pandas
 from scipy.ndimage import rotate
 from collections import deque
 
@@ -45,22 +46,22 @@ from metatouch_label import ClassLabelWidget
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-HOST = config['GLOBAL']['HOST'] 
-PORT =  int(config['GLOBAL']['PORT'])
-CHANNELS = config['GLOBAL']['CHANNELS'][1:-1].split(', ') 
+HOST = config['NETWORK']['HOST'] 
+PORT =  int(config['NETWORK']['PORT'])
+CHANNELS = config['DATA']['CHANNELS'][1:-1].split(', ') 
 NUM_CHANNELS = len(CHANNELS) 
-CLASSES = config['GLOBAL']['CLASSES'][1:-1].split(', ') 
-FPS_TICK_RATE = int(config['GLOBAL']['FPS_TICK_RATE'])
-CAPTURE_SIZE = int(config['GLOBAL']['CAPTURE_SIZE'])
-FRAME_LENGTH = int(config['GLOBAL']['FRAME_LENGTH'])
-INDEX_WIDTH = int(config['GLOBAL']['INDEX_WIDTH'])
+CLASSES = config['DATA']['CLASSES'][1:-1].split(', ') 
+CAPTURE_SIZE = int(config['DATA']['CAPTURE_SIZE'])
+FRAME_LENGTH = int(config['PLOT']['FRAME_LENGTH'])
+INDEX_WIDTH = int(config['PLOT']['INDEX_WIDTH'])
+COLORMAP = config['PLOT']['COLORMAP']
+FPS_TICK_RATE = int(config['PLOT']['FPS_TICK_RATE'])
 
 # ==============================================================================
 
 # Global font configuration
 font_family = 'Verdana'
 fontsize_normal = 11
-fontsize_maximized = 14
 fontsize_labels = fontsize_normal
 fontsize_footer = fontsize_normal + 8
 
@@ -73,11 +74,19 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.show()
         self.setWindowTitle("MetaTouch Plotter V.0.1")
         
-        # Keep track of plot elemenets
+        self.setAttribute(Qt.WA_AcceptTouchEvents, True)
+        self.installEventFilter(self)
+
+        # Keep track of internal plot handler and data
         self.titles = []
         self.lineplots = []
         self.spectrograms = []
         self.update_signals = []
+        self.state_data = {
+            "transition_state" : [],
+            "timestamp" : [],
+        }
+        self.transitions = 0
 
         self.labels = ClassLabelWidget(CLASSES) 
 
@@ -159,7 +168,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.SpecBar = pg.GraphicsLayoutWidget()
         self.Cbar = pg.ColorBarItem(values=(0,2),
                                     width=6,
-                                    colorMap='magma',
+                                    colorMap=COLORMAP,
                                     interactive=False,
                                     orientation='horizontal')
         self.SpecBar.addItem(self.Cbar)
@@ -201,6 +210,22 @@ class MetaTouch(QtWidgets.QMainWindow):
         
         # Apply theme
         self.set_appearance()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.TouchBegin:
+            self.footer.setText("We have a touch begin")
+            self.state_data["transition_state"].append(1)
+            self.state_data["timestamp"].append(time.time())
+            self.transitions += 1
+            return True
+        elif event.type() == QEvent.TouchEnd:
+            self.footer.setText("We have a touch end")
+            self.state_data["transition_state"].append(0)
+            self.state_data["timestamp"].append(time.time())
+            self.transitions += 1
+            return True
+
+        return super(MetaTouch, self).eventFilter(obj, event)
 
     def keyPressEvent(self, event):
         """Listen and handle keyboard input."""
@@ -324,6 +349,11 @@ class MetaTouch(QtWidgets.QMainWindow):
         for lineplot in self.lineplots:
             lineplot.setBackground((44, 44, 46))
 
+    def closeEvent(self,e):
+        df = pandas.DataFrame(state_data)
+        df.to_csv("transitions.csv", sep='\t')  
+        e.accept()
+
 class DataSource():
     """ Class that handles incoming data """ 
     def __init__(self,signal,message,framecount):
@@ -392,7 +422,7 @@ class SpectrogramWidget(pg.PlotWidget):
         self.addItem(self.img)
 
         self.img_array = np.zeros((FRAME_LENGTH, INDEX_WIDTH))
-        cmap = pg.colormap.get('magma')
+        cmap = pg.colormap.get(COLORMAP)
 
         self.img.setColorMap(colorMap=cmap)
 
