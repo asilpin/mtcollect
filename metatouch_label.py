@@ -1,12 +1,14 @@
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-from PyQt5.QtGui import QCursor, QPalette, QFont
+from PyQt5.QtGui import QFont
 
 class ClassLabelWidget(QtWidgets.QWidget):
 
     def __init__(self, LABELS):
         QtWidgets.QWidget.__init__(self)
+        self.font_family = 'Verdana'
+        self.fontsize_normal = 11
 
         self.LabelVL = QtWidgets.QVBoxLayout()
         self.setLayout(self.LabelVL)
@@ -16,15 +18,15 @@ class ClassLabelWidget(QtWidgets.QWidget):
         self.setStyleSheet('background-color: rgb(44, 44, 46); border-radius: 8px;')
 
         self.title = QtWidgets.QLabel('Class Labels')
-        self.title.setStyleSheet("color: white; font: bold")
         self.LabelVL.addWidget(self.title)
 
-        self.scroll = QScrollArea(self)
+        self.scroll = QtWidgets.QScrollArea()
         self.LabelVL.addWidget(self.scroll)
-        self.scroll.setWidgetResizable(True)
-        self.scrollContent = QWidget(self.scroll)
-        self.scrollVL = QtWidgets.QVBoxLayout(self.scrollContent)
+        self.scrollContent = QtWidgets.QWidget()
+        self.scrollVL = QtWidgets.QVBoxLayout()
         self.scrollContent.setLayout(self.scrollVL)
+        self.scroll.setWidget(self.scrollContent)
+        self.scroll.setWidgetResizable(True)
         self.scroll.ensureWidgetVisible(self.scrollContent)
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.scroll.horizontalScrollBar().setEnabled(False)
@@ -35,8 +37,7 @@ class ClassLabelWidget(QtWidgets.QWidget):
         self.label_raw_text = LABELS
         self.selected_color = "color: rgb(255, 69, 58)"
         self.default_color = "color: white"
-        self.palette = QPalette()
-        self.font = QFont()
+        self.font = QFont(self.font_family,self.fontsize_normal)
 
         self.maxWidth = 0
         for i in range(0, len(self.label_raw_text)):
@@ -47,21 +48,15 @@ class ClassLabelWidget(QtWidgets.QWidget):
             if curr_label.width() > self.maxWidth:
                 self.maxWidth = curr_label.width()
 
-            # set first label to selected
-            if i == 0:
-                curr_label.setStyleSheet(self.selected_color)
-            else:
-                curr_label.setStyleSheet(self.default_color)
-
             # add label to layout
             self.scrollVL.addWidget(curr_label)
 
             self.labels.append(curr_label)
             self.frames_collected.append(0)
 
-        self.scroll.setWidget(self.scrollContent)
         self.setMinimumWidth(self.maxWidth)
         self.set_label_text()
+        self.set_appearance()
 
     def get_current_label_raw_text(self):
         """Returns selected label."""
@@ -94,6 +89,14 @@ class ClassLabelWidget(QtWidgets.QWidget):
         # update label text
         self.set_label_text()
 
+    def set_appearance(self):
+        self.title.setFont(self.font)
+        self.title.setStyleSheet("color: white; font: bold")
+        for i in range(len(self.labels)):
+            self.labels[i].setFont(self.font)
+            self.labels[i].setStyleSheet("color: white")
+        self.labels[0].setStyleSheet(self.selected_color)
+
     def set_label_text(self):
         """Set label text to label and frame count."""
         for label, frame_count, label_raw_text in zip(self.labels,
@@ -118,21 +121,3 @@ class ClassLabelWidget(QtWidgets.QWidget):
             # changes colors of labels to highlight the currently selected one
             self.labels[curr_ind].setStyleSheet(self.default_color)
             self.labels[curr_ind-1].setStyleSheet(self.selected_color)
-
-    def switch_theme(self, palette):
-        self.palette = palette
-        curr_index = self.get_current_label_index()
-        self.title.setStyleSheet(self.default_color)
-        for i in range(len(self.labels)):
-            if i == curr_index:
-                self.labels[i].setStyleSheet(self.selected_color)
-            else:
-                self.labels[i].setStyleSheet(self.default_color)
-
-    def setFont(self, font):
-        self.font = font
-        for i in range(len(self.labels)):
-            self.labels[i].setFont(font)
-        font_bold = QFont(font)
-        font_bold.setWeight(99)
-        self.title.setFont(font_bold)

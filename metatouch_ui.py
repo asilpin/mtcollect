@@ -74,7 +74,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.setWindowTitle("MetaTouch Plotter V.0.1")
         
         # Keep track of plot elemenets
-        self.title_labels = []
+        self.titles = []
         self.lineplots = []
         self.spectrograms = []
         self.update_signals = []
@@ -133,7 +133,7 @@ class MetaTouch(QtWidgets.QMainWindow):
             title = QtWidgets.QLabel(self)
             title.setText(CHANNELS[i])
 
-            self.title_labels.append(title)
+            self.titles.append(title)
 
             # Instantiate a line plot widget and route the signal
             lineplot = LineplotWidget()
@@ -315,7 +315,7 @@ class MetaTouch(QtWidgets.QMainWindow):
 
         self.footer.setFont(QFont(font_family, fontsize_footer))
         
-        for title in self.title_labels:
+        for title in self.titles:
             title.setContentsMargins(20,0,0,0)
             title.setFont(QFont(font_family, fontsize_normal))
             title.setStyleSheet("color: white; font: bold")
