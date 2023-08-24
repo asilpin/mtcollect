@@ -128,7 +128,7 @@ class ClassLabelWidget(QtWidgets.QWidget):
 
     def select_element(self, target):
         for i in range(0, len(self.labels)):
-            if self.labels_raw_text[i] == target:
+            if self.label_raw_text[i] == target:
                 self.labels[i].setStyleSheet(self.selected_color)
                 self.index = i
             else:
