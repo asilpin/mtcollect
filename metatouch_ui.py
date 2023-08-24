@@ -39,7 +39,7 @@ from PyQt5.QtGui import QPalette, QColor
 import pyqtgraph as pg
 
 # Custom
-from metatouch_label import ClassLabelWidget
+from metatouch_label import ClassLabelWidget, StateLabelWidget
 
 # ==============================================================================
 # Read in configuration
@@ -52,6 +52,7 @@ CHANNELS = config['DATA']['CHANNELS'][1:-1].split(', ')
 NUM_CHANNELS = len(CHANNELS) 
 CLASSES = config['DATA']['CLASSES'][1:-1].split(', ') 
 CAPTURE_SIZE = int(config['DATA']['CAPTURE_SIZE'])
+BATCH_SIZE = int(config['DATA']['BATCH_SIZE'])
 FRAME_LENGTH = int(config['PLOT']['FRAME_LENGTH'])
 INDEX_WIDTH = int(config['PLOT']['INDEX_WIDTH'])
 COLORMAP = config['PLOT']['COLORMAP']
@@ -67,7 +68,6 @@ fontsize_footer = fontsize_normal + 8
 
 class MetaTouch(QtWidgets.QMainWindow):
     """ Driver class for the application """
-
     def __init__(self):
         super(MetaTouch, self).__init__()
         uic.loadUi("metatouch_layout.ui", self)
@@ -87,11 +87,18 @@ class MetaTouch(QtWidgets.QMainWindow):
             "timestamp" : [],
         }
         self.transitions = 0
+        self.num_frames = 0
+        self.state_index = 0
+        self.streaming = False
 
         self.labels = ClassLabelWidget(CLASSES) 
+        self.states = StateLabelWidget(["No Touch", "Touch"])
+
+        self.ds_signals = Signals()
+        self.ds_signals.read_stream.connect(self.save_stream)
+        self.ds_signals.read_fps.connect(self.add_fps)
 
         # Set up the FPS counter
-        self.num_frames = 0
         self.fps_label = QtWidgets.QLabel()
         self.fps_label.setText(f"FPS: {self.num_frames}")
         self.fps_label.setAlignment(Qt.AlignRight)
@@ -183,7 +190,8 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.PlotVL.addWidget(self.PlotPane)
         
         # Set up the console widgets
-        self.ConsoleGL.addWidget(self.labels, 1, 1,alignment = Qt.AlignLeft)
+        self.ConsoleGL.addWidget(self.labels, 1, 1, alignment = Qt.AlignLeft)
+        self.ConsoleGL.addWidget(self.states, 1, 1, alignment = Qt.AlignRight)
 
         # Set up the footer widgets
         self.FooterGL.addWidget(self.footer, 1, 1, 
@@ -193,7 +201,8 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.FooterGL.addWidget(self.conn_stat, 1, 1,
                                 alignment=Qt.AlignLeft)
        
-        self.ds = DataSource(self.update_signals, self.conn_stat, self.num_frames)
+        self.ds = DataSource(self.update_signals, self.conn_stat,
+                             self.ds_signals.read_stream, self.ds_signals.read_fps) 
         
         self.socket_thread = self.ds.thread()
         self.socket_thread.start()
@@ -201,66 +210,87 @@ class MetaTouch(QtWidgets.QMainWindow):
         # Set up timers
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.ds.read_channels)
-        self.plot_timer.start(100)
+        self.plot_timer.start(1)
 
-        self.num_frames = 0
         self.fps_timer = QtCore.QTimer()
         self.fps_timer.timeout.connect(self.update_fps)
         self.fps_timer.start(FPS_TICK_RATE * 1000)
-        
+
         # Apply theme
         self.set_appearance()
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.TouchBegin:
-            self.footer.setText("We have a touch begin")
-            self.state_data["transition_state"].append(1)
-            self.state_data["timestamp"].append(time.time())
-            self.transitions += 1
+            self.on_touch()
+            if self.streaming:
+                self.footer.setText("We have a touch begin")
+                self.state_data["transition_state"].append(1)
+                self.state_data["timestamp"].append(time.time())
+                self.transitions += 1
+                self.states.select_element("Touch")
             return True
         elif event.type() == QEvent.TouchEnd:
-            self.footer.setText("We have a touch end")
-            self.state_data["transition_state"].append(0)
-            self.state_data["timestamp"].append(time.time())
-            self.transitions += 1
+            if self.streaming:
+                self.footer.setText("We have a touch end")
+                self.state_data["transition_state"].append(0)
+                self.state_data["timestamp"].append(time.time())
+                self.transitions += 1
+                self.states.select_element("No Touch")
             return True
 
         return super(MetaTouch, self).eventFilter(obj, event)
+
+    def on_touch(self):
+        if not self.streaming:
+            self.streaming = True
+            self.labels.deactivate()
+            self.states.activate()
+            self.footer.setText("Continuous Capture")
 
     def keyPressEvent(self, event):
         """Listen and handle keyboard input."""
         self.footer.setText("MetaTouch")
         # Q
         if event.key()==Qt.Key_Q:
-            quit()
-        # SpaceBar
-        if event.key()==Qt.Key_Space:
-            self.footer.setText("Collecting...")
-            self.on_spacebar()
+            self.on_q()
         # P
         elif event.key()==Qt.Key_P:
             self.on_p()
         # C 
         elif event.key()==Qt.Key_C:
             self.on_c()
-        # Backspace 
-        elif event.key()==Qt.Key_Backspace:
-            self.on_backspace()
-        # Key Up
-        elif event.key()==Qt.Key_Up:
-            self.on_up()
-        # Key Down
-        elif event.key()==Qt.Key_Down:
-            self.on_down()
-        # Key Left
-        elif event.key()==Qt.Key_Left:
-            self.on_up()
-        # Key Right
-        elif event.key()==Qt.Key_Right:
-            self.on_down()
+        # S 
+        elif event.key()==Qt.Key_S:
+            self.on_s()
+
+        if not self.streaming:
+            # SpaceBar
+            if event.key()==Qt.Key_Space:
+                self.on_spacebar()
+            # Backspace 
+            elif event.key()==Qt.Key_Backspace:
+                self.on_backspace()
+            # Key Up
+            elif event.key()==Qt.Key_Up:
+                self.on_up()
+            # Key Down
+            elif event.key()==Qt.Key_Down:
+                self.on_down()
+            # Key Left
+            elif event.key()==Qt.Key_Left:
+                self.on_up()
+            # Key Right
+            elif event.key()==Qt.Key_Right:
+                self.on_down()
         else:
             self.footer.setText("Invalid Keyboard Input.")
     
+    def on_q(self):
+        """ Q for quit """
+        df = pandas.DataFrame(self.state_data)
+        df.to_csv("transitions.csv", sep='\t')  
+        quit()
+
     def on_p(self):
         """ P for print screen """
         screenshot = self.PlotPane.grab(self.PlotPane.rect())
@@ -269,17 +299,31 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.footer.setText("Printed to " + filename)
     
     def on_c(self):
-        """ C for clear """
+        """ C for clear plots """
         for i in range(NUM_CHANNELS):
             self.spectrograms[i].clear()
 
+    def on_s(self):
+        """ S for switch mode """
+        self.streaming = not self.streaming
+        print(self.streaming)
+        self.labels.toggle()
+        self.states.toggle()
+    
+        if self.streaming:
+            self.footer.setText("Continuous Capture")
+        else:
+            self.footer.setText("Single Capture")
+
     def on_up(self):
         """ Up or Left Arrow to move label up """
-        self.labels.move_up()
-    
+        if not self.streaming:
+            self.labels.move_up()
+
     def on_down(self):
         """ Down or Right Arrow to move label down """
-        self.labels.move_down()
+        if not self.streaming:
+            self.labels.move_down()
 
     def on_spacebar(self):
         """ Spacebar to collect data """
@@ -304,6 +348,15 @@ class MetaTouch(QtWidgets.QMainWindow):
             os.remove(filename)
         self.labels.add_frames_current_label(-CAPTURE_SIZE)
         self.footer.setText(f"Deleted {CAPTURE_SIZE} frames.")
+
+    def save_stream(self, batch):
+        if self.streaming:
+            np.save(f"state_data_batch_{self.state_index}.npy", batch)
+            self.states.add_frames_current_label(BATCH_SIZE)
+            self.state_index += BATCH_SIZE 
+
+    def add_fps(self, tick):
+        self.num_frames += tick
 
     def update_fps(self, *args):
         """Update FPS label."""
@@ -350,25 +403,37 @@ class MetaTouch(QtWidgets.QMainWindow):
             lineplot.setBackground((44, 44, 46))
 
     def closeEvent(self,e):
-        df = pandas.DataFrame(state_data)
+        df = pandas.DataFrame(self.state_data)
         df.to_csv("transitions.csv", sep='\t')  
         e.accept()
 
 class DataSource():
     """ Class that handles incoming data """ 
-    def __init__(self,signal,message,framecount):
+    def __init__(self,signal,message,export_data, export_fps):
         self.signal = signal
         self.message = message
-        self.framecount = framecount
+        self.export_data = export_data
+        self.export_fps = export_fps
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.slice = np.zeros((NUM_CHANNELS, INDEX_WIDTH))
         self.queue = deque()
         self.queue.append(self.slice)
+        self.batch = []
+        self.batch_index = 0
 
     def read_channels(self):
         for i in range(NUM_CHANNELS):
             self.signal[2*i].emit(self.queue[-1][i])
             self.signal[2*i + 1].emit(self.queue[-1][i])
+       
+        if self.batch_index < BATCH_SIZE:
+            self.batch.append(self.slice)
+            self.batch_index += 1
+        else:
+            self.export_data.emit(self.queue[-1])
+            self.batch = []
+            self.batch_index = 0
+
         if len(self.queue) > 1:
             self.queue.popleft()
 
@@ -389,20 +454,17 @@ class DataSource():
                 signal = np.asarray(signal, dtype='<B').view(np.uint16)
                 self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
                 self.queue.append(self.slice)
-                self.framecount += 1
-                
+                self.export_fps.emit(1) 
             except socket.timeout:
                 self.socket.settimeout(10)
                 self.message.setText("timeout")
     
     def stream(self):
-        try:
-            self.socket.bind((HOST, PORT))
-            self.socket.listen(5) 
-            self.socket.setblocking(0)
-            self.socket.settimeout(20)
-        except:
-            self.message.setText("Can not resolve hostname") 
+        self.socket.bind((HOST, PORT))
+        self.message.setText("Can not resolve hostname") 
+        self.socket.listen(5) 
+        self.socket.setblocking(0)
+        self.socket.settimeout(20)
         while True:
             try:
                 conn, addr = self.socket.accept()
@@ -411,6 +473,11 @@ class DataSource():
             except socket.timeout:
                 self.message.setText("Ended Connection")
                 exit()
+
+class Signals(QObject):
+    read_stream = QtCore.pyqtSignal(np.ndarray)
+    read_fps = QtCore.pyqtSignal(int)
+
 
 class SpectrogramWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
@@ -464,7 +531,7 @@ class LineplotWidget(pg.PlotWidget):
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
-    win = MetaTouch()
+    mt = MetaTouch()
     app.setStyle("Fusion")
     app.setFont(QFont(font_family, fontsize_normal))
     app.exec()        
