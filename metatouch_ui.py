@@ -306,7 +306,6 @@ class MetaTouch(QtWidgets.QMainWindow):
     def on_s(self):
         """ S for switch mode """
         self.streaming = not self.streaming
-        print(self.streaming)
         self.labels.toggle()
         self.states.toggle()
     
