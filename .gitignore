@@ -1,6 +1,7 @@
 __pycache__/
 metatouch_env/
 test_*
+userdata/
 *.npy
 *.csv
 *.png
