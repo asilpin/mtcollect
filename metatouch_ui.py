@@ -441,6 +441,7 @@ class DataSource():
 
     def run_conn_stat(self, conn):
         conn.settimeout(3)
+        self.frames = np.zeros((15,NUM_CHANNELS,INDEX_WIDTH))
         while True:
             try:          
                 signal = np.array([])
@@ -451,9 +452,13 @@ class DataSource():
                     signal = np.hstack((signal, temp))
                     bytes_received += temp.shape[0]
                 signal = np.asarray(signal, dtype='<B').view(np.uint16)
-                self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
+                signal = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32) / 4095 * 3.3
+                self.frames = np.vstack((self.frames, np.expand_dims(signal, axis=0)))
+                self.frames = np.delete(self.frames, 0, axis=0)
+                self.slice = np.mean(self.frames, axis=0)
                 self.queue.append(self.slice)
                 self.export_fps.emit(1) 
+
             except socket.timeout:
                 self.socket.settimeout(10)
                 self.message.setText("timeout")
