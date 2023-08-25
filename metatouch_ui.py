@@ -439,44 +439,16 @@ class DataSource():
     def thread(self):
         return Thread(target=self.stream)
 
-    def run_conn_stat(self, conn):
-        conn.settimeout(3)
-        while True:
-            try:          
-                signal = np.array([])
-                bytes_received = 0
-                while(bytes_received < 2 * 4008):
-                    message = conn.recv(2 * 4008 - bytes_received)
-                    temp = np.frombuffer(message, dtype=np.uint8)
-                    signal = np.hstack((signal, temp))
-                    bytes_received += temp.shape[0]
-                signal = np.asarray(signal, dtype='<B').view(np.uint16)
-                self.slice = np.reshape(signal, (4, 1002))[:,:-2].astype(np.float32)
-                self.queue.append(self.slice)
-                self.export_fps.emit(1) 
-            except socket.timeout:
-                self.socket.settimeout(10)
-                self.message.setText("timeout")
-    
     def stream(self):
-        self.socket.bind((HOST, PORT))
-        self.message.setText("Can not resolve hostname") 
-        self.socket.listen(5) 
-        self.socket.setblocking(0)
-        self.socket.settimeout(20)
-        while True:
-            try:
-                conn, addr = self.socket.accept()
-                self.message.setText(f"Connected to {addr}")
-                self.run_conn_stat(conn)
-            except socket.timeout:
-                self.message.setText("Ended Connection")
-                exit()
+        values = np.linspace(0, 2, INDEX_WIDTH)
+        data_array = np.tile(values, (NUM_CHANNELS, 1))
+        self.slice = data_array
+        self.queue.append(self.slice)
+        self.export_fps.emit(1) 
 
 class Signals(QObject):
     read_stream = QtCore.pyqtSignal(np.ndarray)
     read_fps = QtCore.pyqtSignal(int)
-
 
 class SpectrogramWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
