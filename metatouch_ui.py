@@ -21,7 +21,7 @@ import time
 import configparser
 import subprocess
 import socket
-from threading import Thread
+from threading import Event, Thread
 from datetime import datetime
 
 # Data processing
@@ -289,7 +289,9 @@ class MetaTouch(QtWidgets.QMainWindow):
         """ Q for quit """
         df = pandas.DataFrame(self.state_data)
         df.to_csv("transitions.csv", sep='\t')  
-        quit()
+        self.ds.socket.close()
+        self.ds.kill_socket.set()
+        exit()
 
     def on_p(self):
         """ P for print screen """
@@ -301,7 +303,7 @@ class MetaTouch(QtWidgets.QMainWindow):
     def on_c(self):
         """ C for clear plots """
         for i in range(NUM_CHANNELS):
-            self.spectrograms[i].clear()
+            self.spectrograms[i].read_collected.emit(np.zeros((FRAME_LENGTH,INDEX_WIDTH)))
 
     def on_s(self):
         """ S for switch mode """
@@ -350,7 +352,7 @@ class MetaTouch(QtWidgets.QMainWindow):
 
     def save_stream(self, batch):
         if self.streaming:
-            np.save(f"state_data_batch_{self.state_index}.npy", batch)
+            np.save(f"state_data_batch_{self.state_index}_{time.time()}.npy", batch)
             self.states.add_frames_current_label(BATCH_SIZE)
             self.state_index += BATCH_SIZE 
 
@@ -408,12 +410,14 @@ class MetaTouch(QtWidgets.QMainWindow):
 
 class DataSource():
     """ Class that handles incoming data """ 
+
     def __init__(self,signal,message,export_data, export_fps):
         self.signal = signal
         self.message = message
         self.export_data = export_data
         self.export_fps = export_fps
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.kill_socket = Event()
         self.slice = np.zeros((NUM_CHANNELS, INDEX_WIDTH))
         self.queue = deque()
         self.queue.append(self.slice)
@@ -442,8 +446,10 @@ class DataSource():
     def run_conn_stat(self, conn):
         conn.settimeout(3)
         self.frames = np.zeros((15,NUM_CHANNELS,INDEX_WIDTH))
-        while True:
+        while not self.kill_socket.is_set():
             try:          
+                if self.kill_socket.is_set(): 
+                    break
                 signal = np.array([])
                 bytes_received = 0
                 while(bytes_received < 2 * 4008):
@@ -469,7 +475,7 @@ class DataSource():
         self.socket.listen(5) 
         self.socket.setblocking(0)
         self.socket.settimeout(20)
-        while True:
+        while not self.kill_socket.is_set():
             try:
                 conn, addr = self.socket.accept()
                 self.message.setText(f"Connected to {addr}")
@@ -482,7 +488,6 @@ class Signals(QObject):
     read_stream = QtCore.pyqtSignal(np.ndarray)
     read_fps = QtCore.pyqtSignal(int)
 
-
 class SpectrogramWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
 
@@ -493,6 +498,7 @@ class SpectrogramWidget(pg.PlotWidget):
         self.addItem(self.img)
 
         self.img_array = np.zeros((FRAME_LENGTH, INDEX_WIDTH))
+        self.img.setImage(self.img_array)
         cmap = pg.colormap.get(COLORMAP)
 
         self.img.setColorMap(colorMap=cmap)
@@ -507,14 +513,14 @@ class SpectrogramWidget(pg.PlotWidget):
         self.show()
 
     def update(self, layer):
-        self.img_array = np.roll(self.img_array, -1, 0)
-        self.img_array[-1:] = layer
-        img_display = np.flip(self.img_array, axis=1)
-        img_display = rotate(img_display,angle=90)
-        self.img.setImage(img_display)
-
-    def clear(self):
-        self.img_array = np.zeros((FRAME_LENGTH, INDEX_WIDTH))
+        if layer.shape[0] == FRAME_LENGTH:
+            self.img_array = layer
+        else:
+            self.img_array = np.roll(self.img_array, -1, 0)
+            self.img_array[-1:] = layer
+            img_display = np.flip(self.img_array, axis=1)
+            img_display = rotate(img_display,angle=90)
+            self.img.setImage(img_display)
 
 class LineplotWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
@@ -538,4 +544,4 @@ if __name__ == '__main__':
     mt = MetaTouch()
     app.setStyle("Fusion")
     app.setFont(QFont(font_family, fontsize_normal))
-    app.exec()        
+    sys.exit(app.exec())        
