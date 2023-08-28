@@ -210,7 +210,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         # Set up timers
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.ds.read_channels)
-        self.plot_timer.start(10)
+        self.plot_timer.start(1)
 
         self.fps_timer = QtCore.QTimer()
         self.fps_timer.timeout.connect(self.update_fps)
