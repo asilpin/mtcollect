@@ -496,6 +496,13 @@ class SpectrogramWidget(pg.PlotWidget):
 
         self.img = pg.ImageItem()
         self.addItem(self.img)
+        
+        self.capture_marker = pg.InfiniteLine(pos=FRAME_LENGTH-CAPTURE_SIZE,
+                                              angle=0,
+                                              movable=False,
+                                              bounds=(0,INDEX_WIDTH))
+        self.addItem(self.capture_marker)
+
 
         self.img_array = np.zeros((FRAME_LENGTH, INDEX_WIDTH))
         self.img.setImage(self.img_array)
