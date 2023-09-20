@@ -291,7 +291,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         df.to_csv("transitions.csv", sep='\t')  
         self.ds.socket.close()
         self.ds.kill_socket.set()
-        exit()
+        sys.exit()
 
     def on_p(self):
         """ P for print screen """
