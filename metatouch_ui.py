@@ -445,7 +445,7 @@ class DataSource():
 
     def run_conn_stat(self, conn):
         conn.settimeout(3)
-        self.frames = np.zeros((15,NUM_CHANNELS,INDEX_WIDTH))
+        self.frames = np.zeros((5,NUM_CHANNELS,INDEX_WIDTH))
         while not self.kill_socket.is_set():
             try:          
                 if self.kill_socket.is_set(): 
