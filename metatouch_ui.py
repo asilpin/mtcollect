@@ -65,7 +65,36 @@ FPS_TICK_RATE = int(config['PLOT']['FPS_TICK_RATE'])
 font_family = 'Verdana'
 fontsize_normal = 11
 fontsize_labels = fontsize_normal
-fontsize_footer = fontsize_normal + 16 
+fontsize_footer = fontsize_normal + 48 
+
+class RingBuffer:
+    """ Class that implements a not-yet-full buffer. """
+    def __init__(self, bufsize):
+        self.bufsize = bufsize
+        self.data = []
+
+    class __Full:
+        """ Class that implements a full buffer. """
+        def add(self, x):
+            """ Add an element overwriting the oldest one. """
+            self.data[self.currpos] = x
+            self.currpos = (self.currpos+1) % self.bufsize
+        def get(self):
+            """ Return list of elements in correct order. """
+            return self.data[self.currpos:]+self.data[:self.currpos]
+
+    def add(self,x):
+        """ Add an element at the end of the buffer"""
+        self.data.append(x)
+        if len(self.data) == self.bufsize:
+            # Initializing current position attribute
+            self.currpos = 0
+            # Permanently change self's class from not-yet-full to full
+            self.__class__ = self.__Full
+
+    def get(self):
+        """ Return a list of elements from the oldest to the newest. """
+        return self.data
 
 class MetaTouch(QtWidgets.QMainWindow):
     """ Driver class for the application """
@@ -87,6 +116,7 @@ class MetaTouch(QtWidgets.QMainWindow):
             "transition_state" : [],
             "timestamp" : [],
         }
+        self.prediction_states = RingBuffer(5)
         self.transitions = 0
         self.num_frames = 0
         self.state_index = 0
@@ -286,20 +316,22 @@ class MetaTouch(QtWidgets.QMainWindow):
             self.spectrograms[i].read_collected.emit(np.zeros((FRAME_LENGTH,INDEX_WIDTH)))
 
     def show_prediction(self, result):
-        if result == 0.0:
+        self.prediction_states.add(result)
+        state = np.array(self.prediction_states.get())
+        if np.all(state == 0.0):
             self.footer.setText("Predict: No Touch")
-        elif result == 1.0:
+        elif np.all(state == 1.0):
             self.footer.setText("Predict: Bottle")
-        elif result == 2.0:
+        elif np.all(state == 2.0):
             self.footer.setText("Predict: Drill")
-        elif result == 3.0:
+        elif np.all(state == 3.0):
             self.footer.setText("Predict: Cup")
-        elif result == 4.0:
+        elif np.all(state == 4.0):
             self.footer.setText("Predict: Hammer")
-        elif result == 5.0:
+        elif np.all(state == 5.0):
             self.footer.setText("Predict: Spoon")
         else:
-            self.footer.setText("Predict Error: Invalid Result")
+            self.footer.setText("Predict: No Touch")
 
     def save_stream(self, batch):
         if self.streaming:
