@@ -29,6 +29,7 @@ import numpy as np
 import pandas
 from scipy.ndimage import rotate
 from collections import deque
+from joblib import load
 
 # UI tools 
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
@@ -64,7 +65,7 @@ FPS_TICK_RATE = int(config['PLOT']['FPS_TICK_RATE'])
 font_family = 'Verdana'
 fontsize_normal = 11
 fontsize_labels = fontsize_normal
-fontsize_footer = fontsize_normal + 8
+fontsize_footer = fontsize_normal + 16 
 
 class MetaTouch(QtWidgets.QMainWindow):
     """ Driver class for the application """
@@ -97,6 +98,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.ds_signals = Signals()
         self.ds_signals.read_stream.connect(self.save_stream)
         self.ds_signals.read_fps.connect(self.add_fps)
+        self.ds_signals.read_prediction.connect(self.show_prediction)
 
         # Set up the FPS counter
         self.fps_label = QtWidgets.QLabel()
@@ -190,8 +192,8 @@ class MetaTouch(QtWidgets.QMainWindow):
         self.PlotVL.addWidget(self.PlotPane)
         
         # Set up the console widgets
-        self.ConsoleGL.addWidget(self.labels, 1, 1, alignment = Qt.AlignLeft)
-        self.ConsoleGL.addWidget(self.states, 1, 1, alignment = Qt.AlignRight)
+        # self.ConsoleGL.addWidget(self.labels, 1, 1, alignment = Qt.AlignLeft)
+        # self.ConsoleGL.addWidget(self.states, 1, 1, alignment = Qt.AlignRight)
 
         # Set up the footer widgets
         self.FooterGL.addWidget(self.footer, 1, 1, 
@@ -202,7 +204,7 @@ class MetaTouch(QtWidgets.QMainWindow):
                                 alignment=Qt.AlignLeft)
        
         self.ds = DataSource(self.update_signals, self.conn_stat,
-                             self.ds_signals.read_stream, self.ds_signals.read_fps) 
+                             self.ds_signals.read_stream, self.ds_signals.read_fps, self.ds_signals.read_prediction) 
         
         self.socket_thread = self.ds.thread()
         self.socket_thread.start()
@@ -210,6 +212,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         # Set up timers
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.ds.read_channels)
+        self.plot_timer.timeout.connect(self.ds.read_prediction)
         self.plot_timer.start(1)
 
         self.fps_timer = QtCore.QTimer()
@@ -259,29 +262,6 @@ class MetaTouch(QtWidgets.QMainWindow):
         # C 
         elif event.key()==Qt.Key_C:
             self.on_c()
-        # S 
-        elif event.key()==Qt.Key_S:
-            self.on_s()
-
-        if not self.streaming:
-            # SpaceBar
-            if event.key()==Qt.Key_Space:
-                self.on_spacebar()
-            # Backspace 
-            elif event.key()==Qt.Key_Backspace:
-                self.on_backspace()
-            # Key Up
-            elif event.key()==Qt.Key_Up:
-                self.on_up()
-            # Key Down
-            elif event.key()==Qt.Key_Down:
-                self.on_down()
-            # Key Left
-            elif event.key()==Qt.Key_Left:
-                self.on_up()
-            # Key Right
-            elif event.key()==Qt.Key_Right:
-                self.on_down()
         else:
             self.footer.setText("Invalid Keyboard Input.")
     
@@ -291,7 +271,7 @@ class MetaTouch(QtWidgets.QMainWindow):
         df.to_csv("transitions.csv", sep='\t')  
         self.ds.socket.close()
         self.ds.kill_socket.set()
-        sys.exit()
+        quit()
 
     def on_p(self):
         """ P for print screen """
@@ -305,50 +285,21 @@ class MetaTouch(QtWidgets.QMainWindow):
         for i in range(NUM_CHANNELS):
             self.spectrograms[i].read_collected.emit(np.zeros((FRAME_LENGTH,INDEX_WIDTH)))
 
-    def on_s(self):
-        """ S for switch mode """
-        self.streaming = not self.streaming
-        self.labels.toggle()
-        self.states.toggle()
-    
-        if self.streaming:
-            self.footer.setText("Continuous Capture")
+    def show_prediction(self, result):
+        if result == 0.0:
+            self.footer.setText("Predict: No Touch")
+        elif result == 1.0:
+            self.footer.setText("Predict: Bottle")
+        elif result == 2.0:
+            self.footer.setText("Predict: Drill")
+        elif result == 3.0:
+            self.footer.setText("Predict: Cup")
+        elif result == 4.0:
+            self.footer.setText("Predict: Hammer")
+        elif result == 5.0:
+            self.footer.setText("Predict: Spoon")
         else:
-            self.footer.setText("Single Capture")
-
-    def on_up(self):
-        """ Up or Left Arrow to move label up """
-        if not self.streaming:
-            self.labels.move_up()
-
-    def on_down(self):
-        """ Down or Right Arrow to move label down """
-        if not self.streaming:
-            self.labels.move_down()
-
-    def on_spacebar(self):
-        """ Spacebar to collect data """
-        current_label = self.labels.get_current_label_raw_text()
-        current_label = current_label.lower().strip().replace(" ", "_")
-        num_frame = self.labels.get_current_frames()
-        filename = f"training_data_{current_label}_{num_frame}.npy"
-        collected_data = np.empty((NUM_CHANNELS, CAPTURE_SIZE, INDEX_WIDTH)) 
-        for i in range(NUM_CHANNELS):
-                collected_data[i] = self.spectrograms[i].img_array[-CAPTURE_SIZE:]
-        np.save(filename, collected_data)
-        self.labels.add_frames_current_label(CAPTURE_SIZE)
-        self.footer.setText(f"Collected {CAPTURE_SIZE} frames.")
-    
-    def on_backspace(self):
-        """ Backspace to delete """ 
-        current_label = self.labels.get_current_label_raw_text()
-        current_label = current_label.lower().strip().replace(" ", "_")
-        num_frame = self.labels.get_current_frames() - CAPTURE_SIZE
-        filename = f"training_data_{current_label}_{num_frame}.npy"
-        if os.path.exists(filename):
-            os.remove(filename)
-        self.labels.add_frames_current_label(-CAPTURE_SIZE)
-        self.footer.setText(f"Deleted {CAPTURE_SIZE} frames.")
+            self.footer.setText("Predict Error: Invalid Result")
 
     def save_stream(self, batch):
         if self.streaming:
@@ -411,11 +362,12 @@ class MetaTouch(QtWidgets.QMainWindow):
 class DataSource():
     """ Class that handles incoming data """ 
 
-    def __init__(self,signal,message,export_data, export_fps):
+    def __init__(self,signal,message,export_data, export_fps, export_prediction):
         self.signal = signal
         self.message = message
         self.export_data = export_data
         self.export_fps = export_fps
+        self.export_prediction = export_prediction
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.kill_socket = Event()
         self.slice = np.zeros((NUM_CHANNELS, INDEX_WIDTH))
@@ -423,6 +375,7 @@ class DataSource():
         self.queue.append(self.slice)
         self.batch = []
         self.batch_index = 0
+        self.clf = load("svm_object.joblib")
 
     def read_channels(self):
         for i in range(NUM_CHANNELS):
@@ -439,6 +392,11 @@ class DataSource():
 
         if len(self.queue) > 1:
             self.queue.popleft()
+
+    def read_prediction(self):
+        X_temp = self.slice.copy(),
+        X_temp = np.reshape(X_temp, (1, 4 * 1000))
+        self.export_prediction.emit(self.clf.predict(X_temp)[0])
 
     def thread(self):
         return Thread(target=self.stream)
@@ -487,6 +445,7 @@ class DataSource():
 class Signals(QObject):
     read_stream = QtCore.pyqtSignal(np.ndarray)
     read_fps = QtCore.pyqtSignal(int)
+    read_prediction = QtCore.pyqtSignal(float)
 
 class SpectrogramWidget(pg.PlotWidget):
     read_collected = QtCore.pyqtSignal(np.ndarray)
