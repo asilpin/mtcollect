@@ -7,3 +7,5 @@ test_*
 *.npy
 *.csv
 *.png
+*.zip
+*.joblib

@@ -323,9 +323,9 @@ class MetaTouch(QtWidgets.QMainWindow):
         elif np.all(state == 1.0):
             self.footer.setText("Predict: Bottle")
         elif np.all(state == 2.0):
-            self.footer.setText("Predict: Drill")
-        elif np.all(state == 3.0):
             self.footer.setText("Predict: Cup")
+        elif np.all(state == 3.0):
+            self.footer.setText("Predict: Drill")
         elif np.all(state == 4.0):
             self.footer.setText("Predict: Hammer")
         elif np.all(state == 5.0):
